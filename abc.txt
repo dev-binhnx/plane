@@ -1,0 +1,86 @@
+Nên tách rõ 2 nhánh “sạch” và “tuỳ biến”. Công thức an toàn:
+
+Chiến lược nhánh (khuyến nghị)
+
+main (fork): chỉ dùng để mirror upstream/main. Không push thay đổi cá nhân vào đây.
+
+overlay (hoặc deploy): nhánh dài hạn chứa các tuỳ biến tối thiểu (override, .vscode, docker-compose.override.yml, Dockerfile mở rộng…).
+
+feat/*: nhánh ngắn hạn cho từng chỉnh sửa cụ thể; khi xong thì gộp vào overlay.
+
+(Tuỳ chọn) contrib/*: nhánh sạch để mở PR ngược về upstream.
+
+Thiết lập remotes
+git remote add upstream https://github.com/<org>/<repo-goc>.git
+git fetch upstream
+
+Giữ main luôn sạch (đồng bộ với upstream)
+git checkout main
+git reset --hard upstream/main      # đồng bộ 100%
+git push -f origin main             # cập nhật fork/main
+
+
+Trên GitHub, đừng dùng “Sync fork” nếu bạn lỡ dùng main cho code tuỳ biến.
+
+Vòng đời phát triển
+
+Tạo nhánh tính năng, sửa code:
+
+git checkout -b feat/my-change
+# sửa file bất kỳ
+git add -A && git commit -m "feat: my change"
+git push -u origin feat/my-change
+
+
+Gộp vào nhánh tuỳ biến dài hạn:
+
+git checkout overlay
+git pull --rebase origin overlay
+git merge --no-ff feat/my-change    # hoặc rebase/cherry-pick nếu muốn lịch sử gọn
+git push origin overlay
+
+
+Khi upstream có bản mới → reb ase overlay trên upstream/main:
+
+git fetch upstream
+git checkout overlay
+git rebase upstream/main            # giải quyết xung đột (nếu có)
+git push -f origin overlay
+
+
+Không quen rebase? Dùng merge:
+
+git merge upstream/main
+git push origin overlay
+
+Triển khai/CI
+
+Đặt branch mặc định cho build/deploy là overlay (không phải main).
+
+Docker/CI của bạn luôn build từ overlay → chứa mọi override nhưng vẫn dễ sync upstream.
+
+Tại sao làm vậy?
+
+main sạch giúp bạn sync upstream cực nhanh (reset + push).
+
+Mọi chỉnh sửa riêng nằm ở overlay và feat/*, nên xung đột rất ít (vì chủ yếu đụng .override.yml, .vscode, Dockerfile mở rộng).
+
+Nếu upstream đổi cấu trúc dịch vụ/env, bạn chỉ chỉnh lại override thay vì đụng sâu file gốc.
+
+Lưu ý thực chiến
+
+Đừng commit secrets: dùng .env.example + .gitignore (mình đã tạo sẵn).
+
+Nếu phải sửa file cốt lõi của upstream, cân nhắc:
+
+Dev thì mount + hot-reload (Cách 1).
+
+Khi chốt, đặt bản đè vào overrides/… và COPY trong Dockerfile mở rộng (Cách 2) → sync upstream vẫn “êm”.
+
+Muốn gửi PR về upstream: tạo nhánh contrib/fix-xyz từ upstream/main, chỉ chứa thay đổi tối thiểu, rồi mở PR.
+
+Nếu bạn muốn, mình sẽ:
+
+Tạo luôn nhánh overlay ban đầu (chứa bộ override skeleton mình đã gửi),
+
+Gửi chuỗi lệnh “one-shot” để bạn thiết lập remotes/branches theo sơ đồ trên cho repo hiện tại.
